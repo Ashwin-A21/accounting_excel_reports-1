@@ -18,6 +18,15 @@
         <field name="print_report_name">(object.file_name or 'Tally Profit &amp; Loss')</field>
     </record>
 
+    <record id="action_report_tally_profit_loss_horizontal" model="ir.actions.report">
+        <field name="name">Profit &amp; Loss (Horizontal Tally View)</field>
+        <field name="model">profit.loss.wizard</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">accounting_excel_reports.report_tally_profit_loss_horizontal_template</field>
+        <field name="report_file">accounting_excel_reports.report_tally_profit_loss_horizontal_template</field>
+        <field name="print_report_name">(object.file_name or 'Tally Profit &amp; Loss Horizontal')</field>
+    </record>
+
     <record id="action_report_tally_balance_sheet" model="ir.actions.report">
         <field name="name">Balance Sheet (Tally View)</field>
         <field name="model">balance.sheet.wizard</field>

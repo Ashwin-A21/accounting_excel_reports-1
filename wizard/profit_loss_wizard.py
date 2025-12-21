@@ -14,9 +14,15 @@ class ProfitLossWizard(models.TransientModel):
     company_id = fields.Many2one('res.company', string='Company', 
                                  required=True, 
                                  default=lambda self: self.env.company)
+    
+    horizontal_view = fields.Boolean(string="Horizontal View", default=True)
+    
     excel_file = fields.Binary(string='Excel File', readonly=True)
     file_name = fields.Char(string='File Name', readonly=True)
+    
     line_ids = fields.One2many('tally.profit.loss.line', 'wizard_id', string='Report Lines')
+    income_line_ids = fields.One2many('tally.profit.loss.line', 'wizard_income_id', string='Income Lines')
+    expense_line_ids = fields.One2many('tally.profit.loss.line', 'wizard_expense_id', string='Expense Lines')
 
     @api.constrains('start_date', 'end_date')
     def _check_dates(self):
@@ -25,43 +31,20 @@ class ProfitLossWizard(models.TransientModel):
                 raise UserError('End Date must be greater than Start Date!')
 
     def _classify_pl_account_to_tally_group(self, account):
-        """Standalone Tally Classification for P&L"""
-        name = (account.name or '').lower()
         acc_type = account.account_type
-
-        # Priority 1: Name-based checks
-        if any(x in name for x in ['sale', 'revenue', 'service']):
-            return 'Sales Accounts'
-        if 'purchase' in name or 'cost of goods' in name or 'cogs' in name:
-            return 'Purchase Accounts'
-        
-        # Check for other direct incomes/expenses by name
-        if 'direct income' in name:
-            return 'Direct Incomes'
-        if 'direct expense' in name:
-            return 'Direct Expenses'
-            
-        if 'indirect income' in name:
-            return 'Indirect Incomes'
-        if any(x in name for x in ['salary', 'rent', 'admin', 'utilities', 'depreciation']):
-            return 'Indirect Expenses'
-
-        # Priority 2: Odoo Type fallback
-        if acc_type == 'income':
-            return 'Sales Accounts'
-        if acc_type == 'income_other':
-            return 'Indirect Incomes'
-        if acc_type == 'expense_direct_cost':
-            return 'Direct Expenses'
-        if acc_type in ('expense', 'expense_depreciation'):
-            return 'Indirect Expenses'
-        
-        return 'Miscellaneous Expenses'
+        mapping = {
+            'income': 'Sales Accounts',
+            'income_other': 'Indirect Incomes',
+            'expense_direct_cost': 'Direct Expenses',
+            'expense': 'Indirect Expenses',
+            'expense_depreciation': 'Indirect Expenses',
+        }
+        return mapping.get(acc_type, 'Miscellaneous Expenses')
 
     def _get_period_balances(self, date_from, date_to, company_id):
         """
-        Calculate P&L from core journal items - NET BALANCES for the period
-        Returns natural amounts (positive values)
+        Calculate P&L from core journal items.
+        FIX: Use 'parent_of' in account search to support branches.
         """
         balances = defaultdict(float)
         
@@ -70,9 +53,10 @@ class ProfitLossWizard(models.TransientModel):
             'expense_direct_cost', 'expense', 'expense_depreciation'
         ]
         
+        # FIX: Find accounts in Branch OR Parent
         accounts = self.env['account.account'].search([
             ('account_type', 'in', pl_account_types),
-            ('company_id', '=', company_id.id)
+            ('company_id', 'parent_of', company_id.id)
         ])
         
         if not accounts:
@@ -80,6 +64,7 @@ class ProfitLossWizard(models.TransientModel):
 
         account_type_map = {acc.id: acc.account_type for acc in accounts}
         
+        # Move lines filtered by Specific Branch
         domain = [
             ('move_id.state', '=', 'posted'),
             ('date', '>=', date_from),
@@ -118,232 +103,376 @@ class ProfitLossWizard(models.TransientModel):
 
         return balances
 
-    def _prepare_report_lines(self):
-        """Prepare P&L in Tally standard format"""
+    def _get_account_move_lines(self, account_id, date_from, date_to, company_id):
+        """Get ALL journal entry details for a specific account - for drill-down display."""
+        domain = [
+            ('account_id', '=', account_id),
+            ('move_id.state', '=', 'posted'),
+            ('date', '>=', date_from),
+            ('date', '<=', date_to),
+            ('company_id', '=', company_id.id)
+        ]
+        
+        move_lines = self.env['account.move.line'].search(domain, order='date desc')
+        
+        details = []
+        for ml in move_lines:
+            details.append({
+                'date': ml.date.strftime('%d-%b-%Y') if ml.date else '',
+                'move_name': ml.move_id.name or '',
+                'partner': ml.partner_id.name[:20] if ml.partner_id else '',
+                'label': (ml.name or '')[:30],
+                'debit': ml.debit,
+                'credit': ml.credit,
+            })
+        return details
+
+    def _prepare_vertical_report_lines(self):
+        """Prepare Vertical P&L with drill-down to journal entries"""
         self.ensure_one()
         self.line_ids.unlink()
         
-        period_balances = self._get_period_balances(
-            self.start_date, self.end_date, self.company_id
-        )
-        
-        if not period_balances:
-            self.env['tally.profit.loss.line'].create([{
-                'wizard_id': self.id,
-                'sequence': 10,
-                'level': 0,
-                'name': 'No transactions in this period',
-                'amount': 0.0,
-                'is_group': False,
-                'is_net_result': False,
-            }])
-            return
+        period_balances = self._get_period_balances(self.start_date, self.end_date, self.company_id)
         
         all_accounts = self.env['account.account'].browse(period_balances.keys())
-        
-        # Group accounts
         accounts_by_group = defaultdict(lambda: self.env['account.account'])
         
         for account in all_accounts:
             group_name = self._classify_pl_account_to_tally_group(account)
             accounts_by_group[group_name] |= account
         
-        expense_groups = [
-            'Purchase Accounts',
-            'Direct Expenses',
-            'Indirect Expenses',
-            'Miscellaneous Expenses'
-        ]
-        
-        income_groups = [
-            'Sales Accounts',
-            'Direct Incomes',
-            'Indirect Incomes'
-        ]
+        expense_groups = ['Purchase Accounts', 'Direct Expenses', 'Indirect Expenses', 'Miscellaneous Expenses']
+        income_groups = ['Sales Accounts', 'Direct Incomes', 'Indirect Incomes']
         
         lines = []
         sequence = 0
-        
         total_expenses = 0.0
         total_income = 0.0
         
-        # Process Income Groups
+        # Income
         for group_name in income_groups:
             accounts = accounts_by_group.get(group_name)
-            if not accounts:
-                continue
+            if not accounts: continue
             
-            group_total = 0.0
-            group_lines = []
+            # Calculate group total
+            group_total = sum(period_balances.get(acc.id, 0.0) for acc in accounts if abs(period_balances.get(acc.id, 0.0)) >= 0.01)
+            if abs(group_total) < 0.01: continue
             
+            # Add group header
+            sequence += 10
+            lines.append({
+                'wizard_id': self.id, 
+                'sequence': sequence, 
+                'level': 0, 
+                'name': group_name, 
+                'amount': group_total, 
+                'is_group': True
+            })
+            
+            # Add account lines with journal entry details
             for account in sorted(accounts, key=lambda a: (a.code or '', a.name)):
-                # balance is (credit - debit)
                 balance = period_balances.get(account.id, 0.0)
+                if abs(balance) < 0.01: continue
+                account_key = f"vpl_inc_acc_{account.id}"
                 
-                if abs(balance) < 0.01:
-                    continue
-                
-                group_lines.append({
-                    'level': 1,
-                    'name': f"  {account.name}",
-                    'code': account.code,
-                    'amount': balance, # Keep positive
-                    'is_group': False,
-                    'is_total': False,
-                })
-                
-                group_total += balance
-            
-            if group_lines:
                 sequence += 10
                 lines.append({
-                    'wizard_id': self.id,
-                    'sequence': sequence,
-                    'level': 0,
-                    'name': group_name,
-                    'amount': group_total,
-                    'is_group': True,
+                    'wizard_id': self.id, 
+                    'sequence': sequence, 
+                    'level': 1, 
+                    'name': f"  {account.name}", 
+                    'amount': balance, 
+                    'is_group': False,
+                    'account_id': account.id,
+                    'is_expandable': True,
+                    'group_key': account_key
                 })
                 
-                for line_vals in group_lines:
+                # Add journal entry detail lines
+                move_details = self._get_account_move_lines(account.id, self.start_date, self.end_date, self.company_id)
+                for detail in move_details:
                     sequence += 10
-                    line_vals.update({
+                    lines.append({
                         'wizard_id': self.id,
-                        'sequence': sequence
+                        'sequence': sequence,
+                        'level': 2,
+                        'name': f"    {detail['date']} | {detail['move_name']} | {detail['partner'] or detail['label']}",
+                        'amount': detail['credit'] - detail['debit'],
+                        'is_detail_line': True,
+                        'parent_key': account_key
                     })
-                    lines.append(line_vals)
-                
-                total_income += group_total
+            
+            total_income += group_total
         
-        # Process Expense Groups
+        # Expenses
         for group_name in expense_groups:
             accounts = accounts_by_group.get(group_name)
-            if not accounts:
-                continue
+            if not accounts: continue
             
-            group_total = 0.0
-            group_lines = []
+            # Calculate group total
+            group_total = sum(period_balances.get(acc.id, 0.0) for acc in accounts if abs(period_balances.get(acc.id, 0.0)) >= 0.01)
+            if abs(group_total) < 0.01: continue
             
+            # Add group header
+            sequence += 10
+            lines.append({
+                'wizard_id': self.id, 
+                'sequence': sequence, 
+                'level': 0, 
+                'name': group_name, 
+                'amount': group_total, 
+                'is_group': True
+            })
+            
+            # Add account lines with journal entry details
             for account in sorted(accounts, key=lambda a: (a.code or '', a.name)):
-                # balance is (debit - credit)
                 balance = period_balances.get(account.id, 0.0)
+                if abs(balance) < 0.01: continue
+                account_key = f"vpl_exp_acc_{account.id}"
                 
-                if abs(balance) < 0.01:
-                    continue
-                
-                group_lines.append({
-                    'level': 1,
-                    'name': f"  {account.name}",
-                    'code': account.code,
-                    'amount': balance, # Keep positive
-                    'is_group': False,
-                    'is_total': False,
-                })
-                
-                group_total += balance
-            
-            if group_lines:
                 sequence += 10
                 lines.append({
-                    'wizard_id': self.id,
-                    'sequence': sequence,
-                    'level': 0,
-                    'name': group_name,
-                    'amount': group_total,
-                    'is_group': True,
+                    'wizard_id': self.id, 
+                    'sequence': sequence, 
+                    'level': 1, 
+                    'name': f"  {account.name}", 
+                    'amount': balance, 
+                    'is_group': False,
+                    'account_id': account.id,
+                    'is_expandable': True,
+                    'group_key': account_key
                 })
                 
-                for line_vals in group_lines:
+                # Add journal entry detail lines
+                move_details = self._get_account_move_lines(account.id, self.start_date, self.end_date, self.company_id)
+                for detail in move_details:
                     sequence += 10
-                    line_vals.update({
+                    lines.append({
                         'wizard_id': self.id,
-                        'sequence': sequence
+                        'sequence': sequence,
+                        'level': 2,
+                        'name': f"    {detail['date']} | {detail['move_name']} | {detail['partner'] or detail['label']}",
+                        'amount': detail['debit'] - detail['credit'],
+                        'is_detail_line': True,
+                        'parent_key': account_key
                     })
-                    lines.append(line_vals)
-                
-                total_expenses += group_total
+            
+            total_expenses += group_total
 
-        # Net Profit/Loss
         net_result = total_income - total_expenses
-        
         sequence += 10
         if net_result >= 0:
-            lines.append({
-                'wizard_id': self.id,
-                'sequence': sequence,
-                'level': 0,
-                'name': 'Net Profit',
-                'amount': net_result,
-                'is_net_result': True,
-            })
+            lines.append({'wizard_id': self.id, 'sequence': sequence, 'level': 0, 'name': 'Net Profit', 'amount': net_result, 'is_net_result': True})
         else:
-            lines.append({
-                'wizard_id': self.id,
-                'sequence': sequence,
-                'level': 0,
-                'name': 'Net Loss',
-                'amount': abs(net_result),
-                'is_net_result': True,
-            })
+            lines.append({'wizard_id': self.id, 'sequence': sequence, 'level': 0, 'name': 'Net Loss', 'amount': abs(net_result), 'is_net_result': True})
 
         self.env['tally.profit.loss.line'].create(lines)
 
+    def _prepare_horizontal_report_lines(self):
+        """Prepare P&L in Horizontal Tally Format with drill-down to journal entries"""
+        self.ensure_one()
+        self.income_line_ids.unlink()
+        self.expense_line_ids.unlink()
+        
+        period_balances = self._get_period_balances(self.start_date, self.end_date, self.company_id)
+        
+        all_accounts = self.env['account.account'].browse(period_balances.keys())
+        accounts_by_group = defaultdict(lambda: self.env['account.account'])
+        
+        for account in all_accounts:
+            group_name = self._classify_pl_account_to_tally_group(account)
+            accounts_by_group[group_name] |= account
+
+        expense_groups = ['Purchase Accounts', 'Direct Expenses', 'Indirect Expenses', 'Miscellaneous Expenses']
+        income_groups = ['Sales Accounts', 'Direct Incomes', 'Indirect Incomes']
+
+        inc_lines = []
+        exp_lines = []
+        inc_seq = 0
+        exp_seq = 0
+        
+        total_income = 0.0
+        total_expenses = 0.0
+
+        # 1. Build Income Side (Right)
+        for group_name in income_groups:
+            accounts = accounts_by_group.get(group_name)
+            if not accounts: continue
+            
+            # Calculate group total
+            group_total = sum(period_balances.get(acc.id, 0.0) for acc in accounts if abs(period_balances.get(acc.id, 0.0)) >= 0.01)
+            if abs(group_total) < 0.01: continue
+            
+            # Add group header
+            inc_seq += 10
+            inc_lines.append({
+                'wizard_income_id': self.id, 
+                'sequence': inc_seq, 
+                'level': 0,
+                'name': group_name, 
+                'amount': group_total, 
+                'is_group': True
+            })
+            
+            # Add account lines with journal entry details
+            for account in sorted(accounts, key=lambda a: (a.code or '', a.name)):
+                balance = period_balances.get(account.id, 0.0)
+                if abs(balance) < 0.01: continue
+                account_key = f"hpl_inc_acc_{account.id}"
+                
+                inc_seq += 10
+                inc_lines.append({
+                    'wizard_income_id': self.id, 
+                    'sequence': inc_seq, 
+                    'level': 1, 
+                    'name': f"  {account.name}", 
+                    'amount': balance, 
+                    'is_group': False,
+                    'account_id': account.id,
+                    'is_expandable': True,
+                    'group_key': account_key
+                })
+                
+                # Add journal entry detail lines
+                move_details = self._get_account_move_lines(account.id, self.start_date, self.end_date, self.company_id)
+                for detail in move_details:
+                    inc_seq += 10
+                    inc_lines.append({
+                        'wizard_income_id': self.id,
+                        'sequence': inc_seq,
+                        'level': 2,
+                        'name': f"    {detail['date']} | {detail['move_name']} | {detail['partner'] or detail['label']}",
+                        'amount': detail['credit'] - detail['debit'],
+                        'is_detail_line': True,
+                        'parent_key': account_key
+                    })
+            
+            total_income += group_total
+
+        # 2. Build Expense Side (Left)
+        for group_name in expense_groups:
+            accounts = accounts_by_group.get(group_name)
+            if not accounts: continue
+            
+            # Calculate group total
+            group_total = sum(period_balances.get(acc.id, 0.0) for acc in accounts if abs(period_balances.get(acc.id, 0.0)) >= 0.01)
+            if abs(group_total) < 0.01: continue
+            
+            # Add group header
+            exp_seq += 10
+            exp_lines.append({
+                'wizard_expense_id': self.id, 
+                'sequence': exp_seq, 
+                'level': 0,
+                'name': group_name, 
+                'amount': group_total, 
+                'is_group': True
+            })
+            
+            # Add account lines with journal entry details
+            for account in sorted(accounts, key=lambda a: (a.code or '', a.name)):
+                balance = period_balances.get(account.id, 0.0)
+                if abs(balance) < 0.01: continue
+                account_key = f"hpl_exp_acc_{account.id}"
+                
+                exp_seq += 10
+                exp_lines.append({
+                    'wizard_expense_id': self.id, 
+                    'sequence': exp_seq, 
+                    'level': 1, 
+                    'name': f"  {account.name}", 
+                    'amount': balance, 
+                    'is_group': False,
+                    'account_id': account.id,
+                    'is_expandable': True,
+                    'group_key': account_key
+                })
+                
+                # Add journal entry detail lines
+                move_details = self._get_account_move_lines(account.id, self.start_date, self.end_date, self.company_id)
+                for detail in move_details:
+                    exp_seq += 10
+                    exp_lines.append({
+                        'wizard_expense_id': self.id,
+                        'sequence': exp_seq,
+                        'level': 2,
+                        'name': f"    {detail['date']} | {detail['move_name']} | {detail['partner'] or detail['label']}",
+                        'amount': detail['debit'] - detail['credit'],
+                        'is_detail_line': True,
+                        'parent_key': account_key
+                    })
+            
+            total_expenses += group_total
+
+        # 3. Calculate Net Profit / Loss and Balance the sides
+        net_result = total_income - total_expenses
+        
+        if net_result >= 0:
+            exp_seq += 10
+            exp_lines.append({
+                'wizard_expense_id': self.id, 'sequence': exp_seq, 'level': 0,
+                'name': 'Net Profit', 'amount': net_result, 'is_net_result': True
+            })
+            total_expenses += net_result 
+        else:
+            inc_seq += 10
+            inc_lines.append({
+                'wizard_income_id': self.id, 'sequence': inc_seq, 'level': 0,
+                'name': 'Net Loss', 'amount': abs(net_result), 'is_net_result': True
+            })
+            total_income += abs(net_result)
+
+        # Add Totals Row (CSS handles alignment with align-items: flex-end)
+        inc_seq += 10
+        inc_lines.append({
+            'wizard_income_id': self.id, 'sequence': inc_seq, 'level': 0,
+            'name': 'Total', 'amount': total_income, 'is_total': True
+        })
+        
+        exp_seq += 10
+        exp_lines.append({
+            'wizard_expense_id': self.id, 'sequence': exp_seq, 'level': 0,
+            'name': 'Total', 'amount': total_expenses, 'is_total': True
+        })
+
+        if inc_lines: self.env['tally.profit.loss.line'].create(inc_lines)
+        if exp_lines: self.env['tally.profit.loss.line'].create(exp_lines)
+
     def action_view_report(self):
         self.ensure_one()
-        self._prepare_report_lines()
         self.file_name = f"Profit_Loss_{self.company_id.name}_{self.start_date}_to_{self.end_date}"
-        return self.env.ref('accounting_excel_reports.action_report_tally_profit_loss').report_action(self)
+        
+        if self.horizontal_view:
+            self._prepare_horizontal_report_lines()
+            return self.env.ref('accounting_excel_reports.action_report_tally_profit_loss_horizontal').report_action(self)
+        else:
+            self._prepare_vertical_report_lines()
+            return self.env.ref('accounting_excel_reports.action_report_tally_profit_loss').report_action(self)
 
     def action_download_excel(self):
         self.ensure_one()
         if not self.line_ids:
-            self._prepare_report_lines()
+            self._prepare_vertical_report_lines()
 
         output = BytesIO()
         workbook = xlsxwriter.Workbook(output, {'in_memory': True})
         worksheet = workbook.add_worksheet('Profit & Loss')
 
         formats = {
-            'title': workbook.add_format({
-                'bold': True, 'font_size': 14, 'align': 'center', 'font_name': 'Arial'
-            }),
-            'subtitle': workbook.add_format({
-                'align': 'center', 'font_size': 10, 'font_name': 'Arial'
-            }),
-            'header': workbook.add_format({
-                'bold': True, 'border': 1, 'align': 'center',
-                'bg_color': '#D3D3D3', 'font_name': 'Arial'
-            }),
-            'group': workbook.add_format({
-                'bold': True, 'font_name': 'Arial', 'font_size': 10
-            }),
-            'group_number': workbook.add_format({
-                'bold': True, 'num_format': '#,##0.00', 'font_name': 'Arial'
-            }),
-            'account': workbook.add_format({
-                'font_name': 'Arial', 'font_size': 9
-            }),
-            'number': workbook.add_format({
-                'num_format': '#,##0.00', 'font_name': 'Arial', 'font_size': 9
-            }),
-            'profit': workbook.add_format({
-                'bold': True, 'top': 2, 'bottom': 6,
-                'num_format': '#,##0.00', 'bg_color': '#C6EFCE',
-                'font_color': '#006100', 'font_name': 'Arial'
-            }),
-            'loss': workbook.add_format({
-                'bold': True, 'top': 2, 'bottom': 6,
-                'num_format': '#,##0.00', 'bg_color': '#FFC7CE',
-                'font_color': '#9C0006', 'font_name': 'Arial'
-            }),
+            'title': workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'font_name': 'Arial'}),
+            'subtitle': workbook.add_format({'align': 'center', 'font_size': 10, 'font_name': 'Arial'}),
+            'header': workbook.add_format({'bold': True, 'border': 1, 'align': 'center', 'bg_color': '#D3D3D3', 'font_name': 'Arial'}),
+            'group': workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 10}),
+            'group_number': workbook.add_format({'bold': True, 'num_format': '#,##0.00', 'font_name': 'Arial'}),
+            'account': workbook.add_format({'font_name': 'Arial', 'font_size': 9}),
+            'number': workbook.add_format({'num_format': '#,##0.00', 'font_name': 'Arial', 'font_size': 9}),
+            'profit': workbook.add_format({'bold': True, 'top': 2, 'bottom': 6, 'num_format': '#,##0.00', 'bg_color': '#C6EFCE', 'font_color': '#006100', 'font_name': 'Arial'}),
+            'loss': workbook.add_format({'bold': True, 'top': 2, 'bottom': 6, 'num_format': '#,##0.00', 'bg_color': '#FFC7CE', 'font_color': '#9C0006', 'font_name': 'Arial'}),
         }
 
         worksheet.merge_range('A1:B1', self.company_id.name, formats['title'])
         worksheet.merge_range('A2:B2', 'Profit & Loss Account', formats['title'])
-        worksheet.merge_range('A3:B3', 
-            f'From {self.start_date.strftime("%d-%b-%Y")} To {self.end_date.strftime("%d-%b-%Y")}',
-            formats['subtitle']
-        )
+        worksheet.merge_range('A3:B3', f'From {self.start_date.strftime("%d-%b-%Y")} To {self.end_date.strftime("%d-%b-%Y")}', formats['subtitle'])
 
         worksheet.set_column('A:A', 50)
         worksheet.set_column('B:B', 18)
@@ -354,10 +483,7 @@ class ProfitLossWizard(models.TransientModel):
 
         row = 5
         for line in self.line_ids:
-            # We now display amounts as they are (Income positive, Expense positive)
-            # Net Profit/Loss logic handles the final sign
             amount_to_display = line.amount
-            
             if line.is_net_result:
                 fmt = formats['profit'] if 'Profit' in line.name else formats['loss']
                 worksheet.write(row, 0, line.name, fmt)
@@ -372,7 +498,6 @@ class ProfitLossWizard(models.TransientModel):
 
         workbook.close()
         output.seek(0)
-
         excel_data = output.read()
         self.excel_file = base64.b64encode(excel_data)
         self.file_name = f'Profit_Loss_{self.start_date.strftime("%d%m%Y")}_{self.end_date.strftime("%d%m%Y")}.xlsx'

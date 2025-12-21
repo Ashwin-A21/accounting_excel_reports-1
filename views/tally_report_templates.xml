@@ -5,82 +5,184 @@
             body { font-family: Arial, sans-serif; }
             .o_tally_report_page { padding: 20px; }
             .o_tally_report_page h2 {
-                text-align: center;
-                font-size: 18px;
-                font-weight: bold;
-                margin-bottom: 5px;
+                text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 5px;
             }
             .o_tally_report_page .company_name {
-                text-align: center;
-                font-size: 16px;
-                font-weight: bold;
-                margin-bottom: 3px;
+                text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 3px;
             }
             .o_tally_report_page .report_date {
-                text-align: center;
-                font-size: 12px;
-                margin-bottom: 20px;
+                text-align: center; font-size: 12px; margin-bottom: 20px;
             }
             .o_tally_report_page table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 10px;
+                width: 100%; border-collapse: collapse; margin-top: 10px;
             }
             .o_tally_report_page th {
-                text-align: left;
-                padding: 8px 5px;
-                border-top: 1px solid #000;
-                border-bottom: 1px solid #000;
-                background-color: #f0f0f0;
-                font-weight: bold;
+                text-align: left; padding: 8px 5px; border-top: 1px solid #000;
+                border-bottom: 1px solid #000; background-color: #f0f0f0; font-weight: bold;
             }
-            .o_tally_report_page td {
-                padding: 4px 5px;
-                vertical-align: top;
-            }
-            .o_tally_report_page .tr_group {
-                font-weight: bold;
-                background-color: #fafafa;
-            }
+            .o_tally_report_page td { padding: 4px 5px; vertical-align: top; }
+            .o_tally_report_page .tr_group { font-weight: bold; background-color: #fafafa; }
             .o_tally_report_page .tr_total {
-                font-weight: bold;
-                border-top: 2px solid #000;
-                border-bottom: 3px double #000;
+                font-weight: bold; border-top: 2px solid #000; border-bottom: 3px double #000;
             }
             .o_tally_report_page .tr_net_result {
-                font-weight: bold;
-                border-top: 2px solid #000;
-                border-bottom: 3px double #000;
+                font-weight: bold; border-top: 1px solid #000;
             }
             .o_tally_report_page .tr_net_result_profit {
-                background-color: #C6EFCE;
-                color: #006100;
+                background-color: #C6EFCE; color: #006100;
             }
             .o_tally_report_page .tr_net_result_loss {
-                background-color: #FFC7CE;
-                color: #9C0006;
+                background-color: #FFC7CE; color: #9C0006;
             }
-            .o_tally_report_page .text-right {
-                text-align: right;
+            .o_tally_report_page .text-right { text-align: right; }
+            .o_tally_report_page .text-center { text-align: center; }
+            
+            /* ========== Horizontal Report Styles ========== */
+            /* Headers at top, content flows down, ONLY totals aligned at bottom */
+            .o_horizontal_bs_page .table_container { 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: stretch;  /* Both tables stretch to same height */
             }
-            .o_tally_report_page .text-center {
-                text-align: center;
+            .o_horizontal_bs_page .table_container > table {
+                width: 49%;
+                display: flex;
+                flex-direction: column;
+            }
+            .o_horizontal_bs_page .left_table { margin-right: 2%; }
+            
+            .o_horizontal_bs_page table thead {
+                display: table;
+                width: 100%;
+                table-layout: fixed;
+            }
+            .o_horizontal_bs_page table tbody {
+                display: flex;
+                flex-direction: column;
+                flex-grow: 1;
+            }
+            .o_horizontal_bs_page table tbody tr {
+                display: table;
+                width: 100%;
+                table-layout: fixed;
+            }
+            /* Total row pushed to bottom */
+            .o_horizontal_bs_page table tbody tr.tr_total {
+                margin-top: auto;
+            }
+            /* Detail lines in horizontal reports - keep same width as other rows */
+            .o_horizontal_bs_page table tbody tr.tr_detail_line.visible {
+                display: table !important;
+                width: 100%;
+                table-layout: fixed;
             }
             
-            /* Horizontal Balance Sheet Styles */
-            .o_horizontal_bs_page table {
-                width: 49%;
-                display: inline-table;
-                vertical-align: top;
+            /* ========== EXPANDABLE/COLLAPSIBLE DRILL-DOWN STYLES ========== */
+            
+            /* Clickable expandable account rows */
+            .tr_expandable {
+                cursor: pointer;
+                transition: background-color 0.2s ease;
             }
-            .o_horizontal_bs_page .left_table {
-                margin-right: 2%;
+            .tr_expandable:hover {
+                background-color: #e8f4fc !important;
             }
-            .o_horizontal_bs_page .table_container {
-                display: flex;
-                justify-content: space-between;
+            
+            /* Expand/Collapse icon */
+            .expand-icon {
+                display: inline-block;
+                width: 14px;
+                margin-right: 4px;
+                font-size: 9px;
+                color: #888;
+                transition: transform 0.2s ease;
+            }
+            .expand-icon::before {
+                content: '▶';
+            }
+            .tr_expandable.expanded .expand-icon::before {
+                content: '▼';
+            }
+            
+            /* Detail rows (Journal Entries) - HIDDEN BY DEFAULT */
+            .tr_detail_line {
+                display: none !important;  /* Force hidden by default */
+                background-color: #fafafa;
+            }
+            /* Only visible when toggled */
+            .tr_detail_line.visible {
+                display: table-row !important;  /* Show as table-row for proper column alignment */
+            }
+            /* Only indent the first column (Particulars), not Debit/Credit columns */
+            .tr_detail_line td:first-child {
+                padding-left: 35px;
+                font-size: 10px;
+                color: #666;
+                font-style: italic;
+                border-left: 2px solid #ddd;
+            }
+            /* Style other columns (Debit/Credit/Amount) normally */
+            .tr_detail_line td:not(:first-child) {
+                font-size: 10px;
+                color: #666;
+                font-style: italic;
+            }
+            .tr_detail_line:hover {
+                background-color: #f5f5f5;
+            }
+            
+            /* Animation for expanding rows */
+            @keyframes slideDown {
+                from { opacity: 0; transform: translateY(-3px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .tr_detail_line.visible {
+                animation: slideDown 0.15s ease-out;
+            }
+            
+            /* Highlight effect when clicked */
+            .tr_expandable:active {
+                background-color: #d4edfa !important;
+            }
+            
+            /* Account line styling */
+            .tr_account {
+                background-color: #fff;
             }
         </style>
+        
+        <!-- JavaScript for expand/collapse functionality -->
+        <script type="text/javascript">
+            document.addEventListener('DOMContentLoaded', function() {
+                // Handle click on expandable rows (account lines with journal details)
+                document.querySelectorAll('.tr_expandable').forEach(function(row) {
+                    row.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var groupKey = this.getAttribute('data-group-key');
+                        if (!groupKey) return;
+                        
+                        var isExpanded = this.classList.contains('expanded');
+                        
+                        // Toggle expanded state
+                        this.classList.toggle('expanded');
+                        
+                        // Show/hide detail rows (journal entries)
+                        document.querySelectorAll('.tr_detail_line[data-parent-key="' + groupKey + '"]').forEach(function(detailRow) {
+                            if (isExpanded) {
+                                detailRow.classList.remove('visible');
+                            } else {
+                                detailRow.classList.add('visible');
+                            }
+                        });
+                    });
+                });
+                
+                // Add tooltip for expandable rows
+                document.querySelectorAll('.tr_expandable').forEach(function(row) {
+                    row.setAttribute('title', 'Click to view journal entries');
+                });
+            });
+        </script>
     </template>
 
     <template id="report_tally_trial_balance_template">
@@ -93,7 +195,6 @@
                     <div class="report_date">
                         As on <span t-esc="docs.end_date" t-options="{'widget': 'date', 'format': 'dd-MMM-yyyy'}"/>
                     </div>
-                    
                     <table>
                         <thead>
                             <tr>
@@ -103,21 +204,39 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr t-foreach="docs.line_ids" t-as="line" 
-                                t-att-class="'tr_group' if line.is_group else 'tr_total' if line.is_total else ''">
+                            <t t-foreach="docs.line_ids" t-as="line">
+                                <!-- Determine row class based on line type -->
+                                <t t-set="row_class" t-value="''"/>
+                                <t t-if="line.is_total">
+                                    <t t-set="row_class" t-value="'tr_total'"/>
+                                </t>
+                                <t t-elif="line.is_detail_line">
+                                    <t t-set="row_class" t-value="'tr_detail_line'"/>
+                                </t>
+                                <t t-elif="line.is_group">
+                                    <t t-set="row_class" t-value="'tr_group'"/>
+                                </t>
+                                <t t-elif="line.is_expandable">
+                                    <t t-set="row_class" t-value="'tr_expandable'"/>
+                                </t>
                                 
-                                <td t-esc="line.name"/>
-                                
-                                <td class="text-right">
-                                    <span t-if="line.debit" t-esc="line.debit" 
-                                          t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
-                                </td>
-                                
-                                <td class="text-right">
-                                    <span t-if="line.credit" t-esc="line.credit" 
-                                          t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
-                                </td>
-                            </tr>
+                                <tr t-att-class="row_class"
+                                    t-att-data-group-key="line.group_key if line.is_expandable else None"
+                                    t-att-data-parent-key="line.parent_key if line.is_detail_line else None">
+                                    <td>
+                                        <span t-if="line.is_expandable" class="expand-icon"></span>
+                                        <t t-esc="line.name"/>
+                                    </td>
+                                    <td class="text-right">
+                                        <span t-if="line.debit and line.debit > 0.01" t-esc="line.debit" 
+                                              t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
+                                    </td>
+                                    <td class="text-right">
+                                        <span t-if="line.credit and line.credit > 0.01" t-esc="line.credit" 
+                                              t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
+                                    </td>
+                                </tr>
+                            </t>
                         </tbody>
                     </table>
                 </div>
@@ -136,7 +255,6 @@
                         From <span t-esc="docs.start_date" t-options="{'widget': 'date', 'format': 'dd-MMM-yyyy'}"/>
                         To <span t-esc="docs.end_date" t-options="{'widget': 'date', 'format': 'dd-MMM-yyyy'}"/>
                     </div>
-                    
                     <table>
                         <thead>
                             <tr>
@@ -146,29 +264,147 @@
                         </thead>
                         <tbody>
                             <t t-foreach="docs.line_ids" t-as="line">
-                                <t t-set="tr_class" t-value="'tr_group' if line.is_group else ''"/>
+                                <!-- Determine row class based on line type -->
+                                <t t-set="row_class" t-value="''"/>
                                 <t t-if="line.is_net_result">
-                                    <t t-set="tr_class" t-value="'tr_net_result'"/>
+                                    <t t-set="row_class" t-value="'tr_net_result'"/>
                                     <t t-if="'Profit' in line.name">
-                                         <t t-set="tr_class" t-value="tr_class + ' tr_net_result_profit'"/>
+                                         <t t-set="row_class" t-value="row_class + ' tr_net_result_profit'"/>
                                     </t>
                                     <t t-if="'Loss' in line.name">
-                                         <t t-set="tr_class" t-value="tr_class + ' tr_net_result_loss'"/>
+                                         <t t-set="row_class" t-value="row_class + ' tr_net_result_loss'"/>
                                     </t>
                                 </t>
-                            
-                                <tr t-att-class="tr_class">
-                                    <td t-esc="line.name"/>
-                                    
+                                <t t-elif="line.is_detail_line">
+                                    <t t-set="row_class" t-value="'tr_detail_line'"/>
+                                </t>
+                                <t t-elif="line.is_group">
+                                    <t t-set="row_class" t-value="'tr_group'"/>
+                                </t>
+                                <t t-elif="line.is_expandable">
+                                    <t t-set="row_class" t-value="'tr_expandable'"/>
+                                </t>
+                                
+                                <tr t-att-class="row_class"
+                                    t-att-data-group-key="line.group_key if line.is_expandable else None"
+                                    t-att-data-parent-key="line.parent_key if line.is_detail_line else None">
+                                    <td>
+                                        <span t-if="line.is_expandable" class="expand-icon"></span>
+                                        <t t-esc="line.name"/>
+                                    </td>
                                     <td class="text-right">
-                                        <span t-if="line.amount or line.is_group or line.is_net_result" 
-                                              t-esc="abs(line.amount)" 
+                                        <span t-if="(line.amount and abs(line.amount) > 0.01) or line.is_group or line.is_net_result" 
+                                              t-esc="line.amount" 
                                               t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
                                     </td>
                                 </tr>
                             </t>
                         </tbody>
                     </table>
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <template id="report_tally_profit_loss_horizontal_template">
+        <t t-call="web.html_container">
+            <t t-call="web.internal_layout">
+                <t t-call="accounting_excel_reports.tally_report_style_template"/>
+                <div class="page o_tally_report_page o_horizontal_bs_page">
+                    <div class="company_name" t-esc="docs.company_id.name"/>
+                    <h2>Profit &amp; Loss Account</h2>
+                    <div class="report_date">
+                        From <span t-esc="docs.start_date" t-options="{'widget': 'date', 'format': 'dd-MMM-yyyy'}"/>
+                        To <span t-esc="docs.end_date" t-options="{'widget': 'date', 'format': 'dd-MMM-yyyy'}"/>
+                    </div>
+                    
+                    <div class="table_container">
+                        <table class="left_table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 70%;">Particulars</th>
+                                    <th style="width: 30%; text-align: right;">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="docs.expense_line_ids" t-as="line">
+                                    <t t-set="row_class" t-value="''"/>
+                                    <t t-if="line.is_total">
+                                        <t t-set="row_class" t-value="'tr_total'"/>
+                                    </t>
+                                    <t t-elif="line.is_net_result">
+                                        <t t-set="row_class" t-value="'tr_net_result'"/>
+                                    </t>
+                                    <t t-elif="line.is_detail_line">
+                                        <t t-set="row_class" t-value="'tr_detail_line'"/>
+                                    </t>
+                                    <t t-elif="line.is_group">
+                                        <t t-set="row_class" t-value="'tr_group'"/>
+                                    </t>
+                                    <t t-elif="line.is_expandable">
+                                        <t t-set="row_class" t-value="'tr_expandable'"/>
+                                    </t>
+                                    
+                                    <tr t-att-class="row_class"
+                                        t-att-data-group-key="line.group_key if line.is_expandable else None"
+                                        t-att-data-parent-key="line.parent_key if line.is_detail_line else None">
+                                        <td>
+                                            <span t-if="line.is_expandable" class="expand-icon"></span>
+                                            <t t-esc="line.name"/>
+                                        </td>
+                                        <td class="text-right">
+                                            <span t-if="(line.amount and abs(line.amount) > 0.01) or line.is_group or line.is_total or line.is_net_result" 
+                                                  t-esc="line.amount" 
+                                                  t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                        
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 70%;">Particulars</th>
+                                    <th style="width: 30%; text-align: right;">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="docs.income_line_ids" t-as="line">
+                                    <t t-set="row_class" t-value="''"/>
+                                    <t t-if="line.is_total">
+                                        <t t-set="row_class" t-value="'tr_total'"/>
+                                    </t>
+                                    <t t-elif="line.is_net_result">
+                                        <t t-set="row_class" t-value="'tr_net_result'"/>
+                                    </t>
+                                    <t t-elif="line.is_detail_line">
+                                        <t t-set="row_class" t-value="'tr_detail_line'"/>
+                                    </t>
+                                    <t t-elif="line.is_group">
+                                        <t t-set="row_class" t-value="'tr_group'"/>
+                                    </t>
+                                    <t t-elif="line.is_expandable">
+                                        <t t-set="row_class" t-value="'tr_expandable'"/>
+                                    </t>
+                                    
+                                    <tr t-att-class="row_class"
+                                        t-att-data-group-key="line.group_key if line.is_expandable else None"
+                                        t-att-data-parent-key="line.parent_key if line.is_detail_line else None">
+                                        <td>
+                                            <span t-if="line.is_expandable" class="expand-icon"></span>
+                                            <t t-esc="line.name"/>
+                                        </td>
+                                        <td class="text-right">
+                                            <span t-if="(line.amount and abs(line.amount) > 0.01) or line.is_group or line.is_total or line.is_net_result" 
+                                                  t-esc="line.amount" 
+                                                  t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </t>
         </t>
@@ -193,17 +429,36 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr t-foreach="docs.line_ids" t-as="line" 
-                                t-att-class="'tr_group' if line.is_group else 'tr_total' if line.is_total else ''">
+                            <t t-foreach="docs.line_ids" t-as="line">
+                                <!-- Determine row class based on line type -->
+                                <t t-set="row_class" t-value="''"/>
+                                <t t-if="line.is_total">
+                                    <t t-set="row_class" t-value="'tr_total'"/>
+                                </t>
+                                <t t-elif="line.is_detail_line">
+                                    <t t-set="row_class" t-value="'tr_detail_line'"/>
+                                </t>
+                                <t t-elif="line.is_group">
+                                    <t t-set="row_class" t-value="'tr_group'"/>
+                                </t>
+                                <t t-elif="line.is_expandable">
+                                    <t t-set="row_class" t-value="'tr_expandable'"/>
+                                </t>
                                 
-                                <td t-esc="line.name"/>
-                                
-                                <td class="text-right">
-                                    <span t-if="abs(line.amount) > 0.01 or line.is_group or line.is_total" 
-                                          t-esc="line.amount if line.amount >= 0 else -line.amount" 
-                                          t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
-                                </td>
-                            </tr>
+                                <tr t-att-class="row_class"
+                                    t-att-data-group-key="line.group_key if line.is_expandable else None"
+                                    t-att-data-parent-key="line.parent_key if line.is_detail_line else None">
+                                    <td>
+                                        <span t-if="line.is_expandable" class="expand-icon"></span>
+                                        <t t-esc="line.name"/>
+                                    </td>
+                                    <td class="text-right">
+                                        <span t-if="(line.amount and abs(line.amount) > 0.01) or line.is_group or line.is_total" 
+                                              t-esc="line.amount" 
+                                              t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
+                                    </td>
+                                </tr>
+                            </t>
                         </tbody>
                     </table>
                 </div>
@@ -231,15 +486,36 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr t-foreach="docs.liability_line_ids" t-as="line"
-                                    t-att-class="'tr_group' if line.is_group else 'tr_total' if line.is_total else ''">
-                                    <td t-esc="line.name"/>
-                                    <td class="text-right">
-                                        <span t-if="line.amount or line.is_group or line.is_total" 
-                                              t-esc="abs(line.amount)" 
-                                              t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
-                                    </td>
-                                </tr>
+                                <t t-foreach="docs.liability_line_ids" t-as="line">
+                                    <!-- Determine row class based on line type -->
+                                    <t t-set="row_class" t-value="''"/>
+                                    <t t-if="line.is_total">
+                                        <t t-set="row_class" t-value="'tr_total'"/>
+                                    </t>
+                                    <t t-elif="line.is_detail_line">
+                                        <t t-set="row_class" t-value="'tr_detail_line'"/>
+                                    </t>
+                                    <t t-elif="line.is_group">
+                                        <t t-set="row_class" t-value="'tr_group'"/>
+                                    </t>
+                                    <t t-elif="line.is_expandable">
+                                        <t t-set="row_class" t-value="'tr_expandable'"/>
+                                    </t>
+                                    
+                                    <tr t-att-class="row_class"
+                                        t-att-data-group-key="line.group_key if line.is_expandable else None"
+                                        t-att-data-parent-key="line.parent_key if line.is_detail_line else None">
+                                        <td>
+                                            <span t-if="line.is_expandable" class="expand-icon"></span>
+                                            <t t-esc="line.name"/>
+                                        </td>
+                                        <td class="text-right">
+                                            <span t-if="(line.amount and abs(line.amount) > 0.01) or line.is_group or line.is_total" 
+                                                  t-esc="line.amount" 
+                                                  t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                </t>
                             </tbody>
                         </table>
                         
@@ -251,15 +527,36 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr t-foreach="docs.asset_line_ids" t-as="line"
-                                    t-att-class="'tr_group' if line.is_group else 'tr_total' if line.is_total else ''">
-                                    <td t-esc="line.name"/>
-                                    <td class="text-right">
-                                        <span t-if="line.amount or line.is_group or line.is_total" 
-                                              t-esc="abs(line.amount)" 
-                                              t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
-                                    </td>
-                                </tr>
+                                <t t-foreach="docs.asset_line_ids" t-as="line">
+                                    <!-- Determine row class based on line type -->
+                                    <t t-set="row_class" t-value="''"/>
+                                    <t t-if="line.is_total">
+                                        <t t-set="row_class" t-value="'tr_total'"/>
+                                    </t>
+                                    <t t-elif="line.is_detail_line">
+                                        <t t-set="row_class" t-value="'tr_detail_line'"/>
+                                    </t>
+                                    <t t-elif="line.is_group">
+                                        <t t-set="row_class" t-value="'tr_group'"/>
+                                    </t>
+                                    <t t-elif="line.is_expandable">
+                                        <t t-set="row_class" t-value="'tr_expandable'"/>
+                                    </t>
+                                    
+                                    <tr t-att-class="row_class"
+                                        t-att-data-group-key="line.group_key if line.is_expandable else None"
+                                        t-att-data-parent-key="line.parent_key if line.is_detail_line else None">
+                                        <td>
+                                            <span t-if="line.is_expandable" class="expand-icon"></span>
+                                            <t t-esc="line.name"/>
+                                        </td>
+                                        <td class="text-right">
+                                            <span t-if="(line.amount and abs(line.amount) > 0.01) or line.is_group or line.is_total" 
+                                                  t-esc="line.amount" 
+                                                  t-options="{'widget': 'monetary', 'display_currency': docs.company_id.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                </t>
                             </tbody>
                         </table>
                     </div>
@@ -267,5 +564,4 @@
             </t>
         </t>
     </template>
-    
 </odoo>
