@@ -39,7 +39,7 @@
     'installable': True,
     'application': False,
     'auto_install': False,
-    'license': 'LGPL-3',
+    'license': 'OPL-1',
     'price': 50.00,
     'currency': 'USD',
 }
